@@ -9,7 +9,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
-from rl_inventory.agents.DoubleDQN.ddqn_agent import DoubleDQNAgent
+
+from stable_baselines3 import PPO
+from stable_baselines3 import SAC
+
+from rl_inventory.agents.DoubleDQN.DoubleDQN import DoubleDQNAgent
     
 from rl_inventory.envs.extended_inventory import ExtendedInventoryEnv
 from rl_inventory.envs.extended_inventory_ppo import ExtendedInventoryEnvPPO
@@ -115,7 +119,7 @@ def prompt_train_or_load(agent_name: str) -> tuple[bool, Optional[str]]:
 
 def save_qlearning_model(agent: QLearningAgent, discretizer: StateDiscretizer, 
                          agent_name: str, model_name: str) -> str:
-    """Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."""
+    "Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pkl")
     
@@ -166,7 +170,7 @@ def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
 
 def load_ppo_model(model_name: str):
     "Load PPO model."
-    from stable_baselines3 import PPO
+
     
     path = get_model_save_path("ppo")
     filepath = os.path.join(path, model_name)
@@ -178,7 +182,6 @@ def load_ppo_model(model_name: str):
 
 def load_sac_model(model_name: str):
     "Load SAC model."
-    from stable_baselines3 import SAC
     
     path = get_model_save_path("sac")
     filepath = os.path.join(path, model_name)
@@ -190,7 +193,6 @@ def load_sac_model(model_name: str):
 
 def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
     "Save Double DQN agent."
-    import torch
     
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pt")
