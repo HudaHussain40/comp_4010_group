@@ -1,5 +1,19 @@
-"Evaluation Framework for Inventory Management RL"
+"""
+Evaluation Framework for Inventory Management RL
 
+- Supports multiple algorithms (Q-Learning, PPO, SAC, etc.)
+- Uses fresh environments per evaluation episode via env_factory
+- Ensures fair, comparable evaluation across algorithms
+- Auto-saves trained models to rl_inventory/agents/<agent_name>/trained_models/
+- Supports loading previously trained models
+
+Usage:
+    python evaluate.py          # Interactive mode
+    python evaluate.py --auto   # Auto mode: use first saved model or train new with auto-generated name
+    python evaluate.py --train  # Force train new models for all algorithms
+"""
+
+import argparse
 import os
 import pickle
 from datetime import datetime
@@ -34,19 +48,19 @@ BASE_AGENTS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "age
 
 
 def get_model_save_path(agent_name: str) -> str:
-    "Get the path to save/load models for a specific agent."
+    """Get the path to save/load models for a specific agent."""
     path = os.path.join(BASE_AGENTS_PATH, agent_name, "trained_models")
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def generate_model_name() -> str:
-    "Generate a unique model name based on timestamp."
+    """Generate a unique model name based on timestamp."""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def list_saved_models(agent_name: str) -> List[str]:
-    "List all saved models for a given agent."
+    """List all saved models for a given agent."""
     path = get_model_save_path(agent_name)
     if not os.path.exists(path):
         return []
@@ -63,7 +77,7 @@ def list_saved_models(agent_name: str) -> List[str]:
 
 
 def prompt_model_name(agent_name: str) -> str:
-    "Prompt user to generate or enter a custom model name."
+    """Prompt user to generate or enter a custom model name."""
     print(f"\nModel naming for {agent_name}:")
     print("  [1] Auto-generate name")
     print("  [2] Enter custom name")
@@ -83,14 +97,39 @@ def prompt_model_name(agent_name: str) -> str:
             print("  Invalid choice. Enter 1 or 2.")
 
 
-def prompt_train_or_load(agent_name: str) -> tuple[bool, Optional[str]]:
-    "Prompt user to train a new model or load an existing one."
+def prompt_train_or_load(agent_name: str, auto_mode: bool = False, force_train: bool = False) -> tuple[bool, Optional[str]]:
+    """Prompt user to train a new model or load an existing one.
+    
+    Args:
+        agent_name: Name of the agent
+        auto_mode: If True, automatically select first model or train new
+        force_train: If True, always train a new model
+    """
     saved_models = list_saved_models(agent_name)
     
     print(f"\n{'='*50}")
     print(f" {agent_name.upper()} ")
     print(f"{'='*50}")
     
+    # Force train mode
+    if force_train:
+        print("\nForce train mode: Training new model...")
+        model_name = generate_model_name()
+        print(f"  Auto-generated name: {model_name}")
+        return True, model_name
+    
+    # Auto mode
+    if auto_mode:
+        if saved_models:
+            print(f"\nAuto mode: Loading first saved model: {saved_models[0]}")
+            return False, saved_models[0]
+        else:
+            print("\nAuto mode: No saved models found. Training new model...")
+            model_name = generate_model_name()
+            print(f"  Auto-generated name: {model_name}")
+            return True, model_name
+    
+    # Interactive mode
     if saved_models:
         print(f"\nFound {len(saved_models)} saved model(s):")
         for i, model in enumerate(saved_models, 1):
@@ -119,14 +158,14 @@ def prompt_train_or_load(agent_name: str) -> tuple[bool, Optional[str]]:
 
 def save_qlearning_model(agent: QLearningAgent, discretizer: StateDiscretizer, 
                          agent_name: str, model_name: str) -> str:
-    "Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."
+    """Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."""
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pkl")
     
     save_data = {
         "Q": dict(agent.Q),
         "n_actions": agent.n_actions,
-        "discretizer_bins": discretizer.bins,
+        "discretizer": discretizer,  # Save entire discretizer object
     }
     
     with open(filepath, "wb") as f:
@@ -137,15 +176,19 @@ def save_qlearning_model(agent: QLearningAgent, discretizer: StateDiscretizer,
 
 
 def load_qlearning_model(agent_name: str, model_name: str) -> tuple[QLearningAgent, StateDiscretizer]:
-    "Load Q-Learning or Dyna-Q agent."
+    """Load Q-Learning or Dyna-Q agent."""
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pkl")
     
     with open(filepath, "rb") as f:
         save_data = pickle.load(f)
     
-    # Recreate discretizer
-    discretizer = StateDiscretizer(bins=save_data["discretizer_bins"])
+    # Get discretizer (either pickled directly or reconstruct from bins)
+    if "discretizer" in save_data:
+        discretizer = save_data["discretizer"]
+    else:
+        # Fallback for older saves that used discretizer_bins
+        discretizer = StateDiscretizer(bins=save_data["discretizer_bins"])
     
     # Recreate agent with loaded Q-table
     agent = QLearningAgent(
@@ -159,7 +202,7 @@ def load_qlearning_model(agent_name: str, model_name: str) -> tuple[QLearningAge
 
 
 def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
-    "Save Stable Baselines3 model (PPO, SAC)."
+    """Save Stable Baselines3 model (PPO, SAC)."""
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, model_name)
     
@@ -169,9 +212,7 @@ def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
 
 
 def load_ppo_model(model_name: str):
-    "Load PPO model."
-
-    
+    """Load PPO model."""
     path = get_model_save_path("ppo")
     filepath = os.path.join(path, model_name)
     
@@ -181,8 +222,7 @@ def load_ppo_model(model_name: str):
 
 
 def load_sac_model(model_name: str):
-    "Load SAC model."
-    
+    """Load SAC model."""
     path = get_model_save_path("sac")
     filepath = os.path.join(path, model_name)
     
@@ -192,8 +232,7 @@ def load_sac_model(model_name: str):
 
 
 def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
-    "Save Double DQN agent."
-    
+    """Save Double DQN agent."""
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pt")
     
@@ -214,8 +253,7 @@ def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
 
 
 def load_ddqn_model(model_name: str):
-    "Load Double DQN agent."
-
+    """Load Double DQN agent."""
     path = get_model_save_path("DoubleDQN")
     filepath = os.path.join(path, f"{model_name}.pt")
     
@@ -380,7 +418,7 @@ class InventoryEvaluator:
         num_episodes: int = 10,
         base_seed: int = 0,
     ) -> Dict[str, Dict[str, float]]:
-        "Evaluate agent over multiple episodes with different seeds."
+        """Evaluate agent over multiple episodes with different seeds."""
 
         results: List[Dict[str, float]] = []
 
@@ -405,7 +443,7 @@ class InventoryEvaluator:
 
     @staticmethod
     def print_report(metrics: Dict[str, Dict[str, float]], name: str = "Agent") -> None:
-        "Print evaluation report."
+        """Print evaluation report."""
         print(f"\n{name} Evaluation Report")
 
         print(f"\nCOSTS")
@@ -426,7 +464,7 @@ class InventoryEvaluator:
 
     @staticmethod
     def compare_algorithms(df: pd.DataFrame) -> None:
-        "Plot comparison across algorithms based on a summary DataFrame."
+        """Plot comparison across algorithms based on a summary DataFrame."""
 
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
@@ -449,7 +487,7 @@ class InventoryEvaluator:
 
 
 class DDQNWrapper:
-    "Wrapper to make DDQN agent compatible with SB3-style predict() interface."
+    """Wrapper to make DDQN agent compatible with SB3-style predict() interface."""
     def __init__(self, agent):
         self.agent = agent
 
@@ -463,12 +501,33 @@ def main():
       - For each algorithm, prompts to train new or load existing model
       - Saves trained models automatically
       - Evaluates each with fresh envs and shared metrics
+    
+    Command-line options:
+      --auto   Auto mode: use first saved model or train new with auto-generated name
+      --train  Force train new models for all algorithms
     """
+    parser = argparse.ArgumentParser(
+        description="Evaluate inventory management RL algorithms"
+    )
+    parser.add_argument(
+        "--auto", "-a",
+        action="store_true",
+        help="Auto mode: use first saved model or train new with auto-generated name"
+    )
+    parser.add_argument(
+        "--train", "-t",
+        action="store_true", 
+        help="Force train new models for all algorithms"
+    )
+    args = parser.parse_args()
+    
+    auto_mode = args.auto
+    force_train = args.train
 
     results_rows: List[Dict[str, float]] = []
 
     # Q-LEARNING (TABULAR, DISCRETE ACTIONS)
-    train_new, model_name = prompt_train_or_load("qlearning")
+    train_new, model_name = prompt_train_or_load("qlearning", auto_mode, force_train)
     
     if train_new:
         print("\n  Training Q-Learning agent...")
@@ -492,7 +551,7 @@ def main():
     })
 
     # PPO (CONTINUOUS)
-    train_new, model_name = prompt_train_or_load("ppo")
+    train_new, model_name = prompt_train_or_load("ppo", auto_mode, force_train)
     
     if train_new:
         print("\n  Training PPO agent...")
@@ -528,7 +587,7 @@ def main():
     })
 
     # SAC (CONTINUOUS)
-    train_new, model_name = prompt_train_or_load("sac")
+    train_new, model_name = prompt_train_or_load("sac", auto_mode, force_train)
     
     if train_new:
         print("\n  Training SAC agent...")
@@ -552,7 +611,7 @@ def main():
     })
 
     # DYNA-Q (DISCRETE)
-    train_new, model_name = prompt_train_or_load("dyna_q")
+    train_new, model_name = prompt_train_or_load("dyna_q", auto_mode, force_train)
     
     if train_new:
         print("\n  Training Dyna-Q agent...")
@@ -576,7 +635,7 @@ def main():
     })
 
     # DOUBLE DQN (DISCRETE)
-    train_new, model_name = prompt_train_or_load("DoubleDQN")
+    train_new, model_name = prompt_train_or_load("DoubleDQN", auto_mode, force_train)
     
     if train_new:
         print("\n  Training Double DQN agent...")
@@ -602,7 +661,9 @@ def main():
 
     # Summary comparison
     df = pd.DataFrame(results_rows).sort_values("Avg Cost", ascending=True)
+    print(f"\n{'='*60}")
     print(" SUMMARY COMPARISON ")
+    print(f"{'='*60}")
     print(df.to_string(index=False))
 
     InventoryEvaluator.compare_algorithms(df)
