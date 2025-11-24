@@ -206,7 +206,12 @@ def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, model_name)
     
-    agent.save(filepath)
+    # Handle wrapper classes that contain the actual SB3 model
+    if hasattr(agent, 'model') and hasattr(agent.model, 'save'):
+        agent.model.save(filepath)
+    else:
+        agent.save(filepath)
+    
     print(f"  Saved model to: {filepath}.zip")
     return filepath
 
@@ -230,23 +235,22 @@ def load_sac_model(model_name: str):
     print(f"  Loaded model from: {filepath}.zip")
     return agent
 
-
 def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
     """Save Double DQN agent."""
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pt")
     
-    # Save the network state dict
-    if hasattr(agent, "policy_net"):
-        torch.save({
-            "policy_net_state_dict": agent.policy_net.state_dict(),
-            "target_net_state_dict": agent.target_net.state_dict(),
-        }, filepath)
-    elif hasattr(agent, "model"):
-        torch.save({"model_state_dict": agent.model.state_dict()}, filepath)
+    # Use the agent's built-in save method if available
+    if hasattr(agent, 'save'):
+        agent.save(filepath)
     else:
-        # Fallback: try to save the whole agent
-        torch.save(agent, filepath)
+        # Fallback for custom save format
+        torch.save({
+            "main_network_state_dict": agent.main_network.state_dict(),
+            "target_network_state_dict": agent.target_network.state_dict(),
+            "epsilon": agent.epsilon,
+            "step_count": agent.step_count
+        }, filepath)
     
     print(f"  Saved model to: {filepath}")
     return filepath
@@ -257,23 +261,26 @@ def load_ddqn_model(model_name: str):
     path = get_model_save_path("DoubleDQN")
     filepath = os.path.join(path, f"{model_name}.pt")
     
-    # Create a fresh agent and load weights
+    # Create a fresh agent
     env = ExtendedInventoryEnv_DDQN(discrete_actions=True)
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     
     agent = DoubleDQNAgent(state_dim=state_dim, action_dim=action_dim)
     
-    checkpoint = torch.load(filepath, weights_only=False)
-    if "policy_net_state_dict" in checkpoint:
-        agent.policy_net.load_state_dict(checkpoint["policy_net_state_dict"])
-        agent.target_net.load_state_dict(checkpoint["target_net_state_dict"])
-    elif "model_state_dict" in checkpoint:
-        agent.model.load_state_dict(checkpoint["model_state_dict"])
+    # Use the agent's built-in load method if available
+    if hasattr(agent, 'load'):
+        agent.load(filepath)
+    else:
+        # Fallback for custom load format
+        checkpoint = torch.load(filepath, map_location=agent.device, weights_only=False)
+        agent.main_network.load_state_dict(checkpoint["main_network_state_dict"])
+        agent.target_network.load_state_dict(checkpoint["target_network_state_dict"])
+        agent.epsilon = checkpoint.get("epsilon", agent.epsilon_min)
+        agent.step_count = checkpoint.get("step_count", 0)
     
     print(f"  Loaded model from: {filepath}")
     return agent
-
 
 def make_env_factory(
     env_cls: Callable[..., ExtendedInventoryEnv],
