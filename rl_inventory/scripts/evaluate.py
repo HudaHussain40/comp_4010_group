@@ -1,12 +1,6 @@
 """
 Evaluation Framework for Inventory Management RL
 
-- Supports multiple algorithms (Q-Learning, PPO, SAC, etc.)
-- Uses fresh environments per evaluation episode via env_factory
-- Ensures fair, comparable evaluation across algorithms
-- Auto-saves trained models to rl_inventory/agents/<agent_name>/trained_models/
-- Supports loading previously trained models
-
 Usage:
     python evaluate.py          # Interactive mode
     python evaluate.py --auto   # Auto mode: use first saved model or train new with auto-generated name
@@ -48,19 +42,19 @@ BASE_AGENTS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "age
 
 
 def get_model_save_path(agent_name: str) -> str:
-    """Get the path to save/load models for a specific agent."""
+    "Get the path to save/load models for a specific agent."
     path = os.path.join(BASE_AGENTS_PATH, agent_name, "trained_models")
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def generate_model_name() -> str:
-    """Generate a unique model name based on timestamp."""
+    "Generate a unique model name based on timestamp."
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def list_saved_models(agent_name: str) -> List[str]:
-    """List all saved models for a given agent."""
+    "List all saved models for a given agent."
     path = get_model_save_path(agent_name)
     if not os.path.exists(path):
         return []
@@ -77,7 +71,7 @@ def list_saved_models(agent_name: str) -> List[str]:
 
 
 def prompt_model_name(agent_name: str) -> str:
-    """Prompt user to generate or enter a custom model name."""
+    "Prompt user to generate or enter a custom model name."
     print(f"\nModel naming for {agent_name}:")
     print("  [1] Auto-generate name")
     print("  [2] Enter custom name")
@@ -158,7 +152,7 @@ def prompt_train_or_load(agent_name: str, auto_mode: bool = False, force_train: 
 
 def save_qlearning_model(agent: QLearningAgent, discretizer: StateDiscretizer, 
                          agent_name: str, model_name: str) -> str:
-    """Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."""
+    "Save Q-Learning or Dyna-Q agent (Q-table + discretizer)."
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pkl")
     
@@ -176,7 +170,7 @@ def save_qlearning_model(agent: QLearningAgent, discretizer: StateDiscretizer,
 
 
 def load_qlearning_model(agent_name: str, model_name: str) -> tuple[QLearningAgent, StateDiscretizer]:
-    """Load Q-Learning or Dyna-Q agent."""
+    "Load Q-Learning or Dyna-Q agent."
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pkl")
     
@@ -202,7 +196,7 @@ def load_qlearning_model(agent_name: str, model_name: str) -> tuple[QLearningAge
 
 
 def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
-    """Save Stable Baselines3 model (PPO, SAC)."""
+    "Save Stable Baselines3 model (PPO, SAC)."
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, model_name)
     
@@ -217,7 +211,7 @@ def save_sb3_model(agent, agent_name: str, model_name: str) -> str:
 
 
 def load_ppo_model(model_name: str):
-    """Load PPO model."""
+    "Load PPO model."
     path = get_model_save_path("ppo")
     filepath = os.path.join(path, model_name)
     
@@ -227,7 +221,7 @@ def load_ppo_model(model_name: str):
 
 
 def load_sac_model(model_name: str):
-    """Load SAC model."""
+    "Load SAC model."
     path = get_model_save_path("sac")
     filepath = os.path.join(path, model_name)
     
@@ -236,7 +230,7 @@ def load_sac_model(model_name: str):
     return agent
 
 def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
-    """Save Double DQN agent."""
+    "Save Double DQN agent."
     path = get_model_save_path(agent_name)
     filepath = os.path.join(path, f"{model_name}.pt")
     
@@ -257,7 +251,7 @@ def save_ddqn_model(agent, agent_name: str, model_name: str) -> str:
 
 
 def load_ddqn_model(model_name: str):
-    """Load Double DQN agent."""
+    "Load Double DQN agent."
     path = get_model_save_path("DoubleDQN")
     filepath = os.path.join(path, f"{model_name}.pt")
     
@@ -425,7 +419,7 @@ class InventoryEvaluator:
         num_episodes: int = 10,
         base_seed: int = 0,
     ) -> Dict[str, Dict[str, float]]:
-        """Evaluate agent over multiple episodes with different seeds."""
+        "Evaluate agent over multiple episodes with different seeds."
 
         results: List[Dict[str, float]] = []
 
@@ -450,7 +444,7 @@ class InventoryEvaluator:
 
     @staticmethod
     def print_report(metrics: Dict[str, Dict[str, float]], name: str = "Agent") -> None:
-        """Print evaluation report."""
+        "Print evaluation report."
         print(f"\n{name} Evaluation Report")
 
         print(f"\nCOSTS")
@@ -471,7 +465,7 @@ class InventoryEvaluator:
 
     @staticmethod
     def compare_algorithms(df: pd.DataFrame) -> None:
-        """Plot comparison across algorithms based on a summary DataFrame."""
+        "Plot comparison across algorithms based on a summary DataFrame."
 
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
@@ -494,7 +488,7 @@ class InventoryEvaluator:
 
 
 class DDQNWrapper:
-    """Wrapper to make DDQN agent compatible with SB3-style predict() interface."""
+    "Wrapper to make DDQN agent compatible with SB3-style predict() interface."
     def __init__(self, agent):
         self.agent = agent
 
@@ -562,19 +556,7 @@ def main():
     
     if train_new:
         print("\n  Training PPO agent...")
-        ppo_agent, _ = train_ppo_agent(
-            num_timesteps=365_000,
-            n_steps=512,
-            learning_rate=2e-4,
-            batch_size=64,
-            n_epochs=15,
-            gamma=0.99,
-            gae_lambda=0.95,
-            clip_range=0.2,
-            ent_coef=0.001,
-            seed=42,
-            save_name=None,
-        )
+        ppo_agent, _ = train_ppo_agent(num_timesteps=365_000)
         save_sb3_model(ppo_agent, "ppo", model_name)
     else:
         ppo_agent = load_ppo_model(model_name)
